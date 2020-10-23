@@ -1,0 +1,18 @@
+read.txt
+
+:Author: kalipy
+:Email: kalipy@debian
+:Date: 2020-10-23 17:43
+
+qemu虚拟开发板中执行：
+
+0.depmod
+
+//加载驱动 不要后缀名.ko 不然not found
+1.modprobe chrdevbase
+
+//手动创建设备节点
+2.mknod /dev/chrdevbase c 200 0
+
+//执行驱动应用App
+3. ./chrdevbaseAPP /dev/chrdevbase
