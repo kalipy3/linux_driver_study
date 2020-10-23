@@ -9,9 +9,14 @@
 #include <linux/kernel.h>
 #include <linux/init.h>
 #include <linux/fs.h>
+#include <linux/ide.h>  //copy_to_user函数头文件
 
 #define CHRDEVBASE_MAJOR    200 //主设备号
 #define CHRDEVBASE_NAME     "chrdevbase" //名字
+
+static char readbuf[100]; //读缓冲
+static char writebuf[100]; //写缓冲
+static char kerneldata[] = {"kernel data!"};
 
 static int chrdevbase_open(struct inode *inode, struct file *filp)
 {
@@ -28,14 +33,30 @@ static int chrdevbase_release(struct inode *inode, struct file *filp)
 static ssize_t chrdevbase_read(struct file *filp, __user char *buf, 
         size_t count, loff_t *ppos)
 {
-    printk("chrdevbase_read\r\n");
+    int ret = 0;
+    //printk("chrdevbase_read\r\n");
+    memcpy(readbuf, kerneldata, sizeof(kerneldata));
+    ret = copy_to_user(buf, readbuf, count);
+    if (ret == 0) {
+
+    } else {
+
+    }
+
     return 0;
 }
 
 static ssize_t chrdevbase_write(struct file *filp, __user char *buf, 
         size_t count, loff_t *ppos)
 {
-    printk("chrdevbase_write\r\n");
+    int ret = 0;
+    //printk("chrdevbase_write\r\n");
+    ret = copy_from_user(writebuf, buf, count);
+    if (ret == 0) {
+        printk("kernel recevdata:%s\r\n", writebuf);
+    } else {
+
+    }
     return 0;
 }
 
