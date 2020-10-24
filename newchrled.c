@@ -68,12 +68,16 @@ static void led_switch(u8 sta)
 static int newchrled_open(struct inode *inode, struct file *filp)
 {
     printk("chrdevbase_open\r\n");
+    filp->private_data = &newchrled;
+
     return 0;
 }
 
 static int newchrled_release(struct inode *inode, struct file *filp)
 {
     printk("chrdevbase_release\r\n");
+    struct newchrled_dev *dev = (struct newchrled_dev*)filp->private_data;
+
     return 0;
 }
 
@@ -145,29 +149,49 @@ static int /*__init*/ newchrled_init(void)
 
     if (ret < 0) {
         printk("newchrled chardev_region failed!\r\n");
-        return -1;
+        goto fail_devid;
     }
     printk("newchrled major=%d, minor=%d\r\n", newchrled.major, newchrled.minor);
 
     //3,注册字符设备
     newchrled.cdev.owner = THIS_MODULE;
     cdev_init(&newchrled.cdev, &newchrled_fops);
+    if (ret < 0) {
+        goto fail_cdev;
+    }
     ret = cdev_add(&newchrled.cdev, newchrled.devid, NEWCHRLED_COUNT);
+    if (ret < 0) {
+        goto fail_cdev;
+    }
 
     //4,自动创建设备节点
     newchrled.class = class_create(THIS_MODULE, NEWCHRLED_NAME); 
     if (IS_ERR(newchrled.class)) {
-        return PTR_ERR(newchrled.class);
+        ret = PTR_ERR(newchrled.class);
+        goto fail_class;
     }
     
     newchrled.device = device_create(newchrled.class, NULL, newchrled.devid,
             NULL, NEWCHRLED_NAME);
     if (IS_ERR(newchrled.device)) {
-        return PTR_RET(newchrled.device);
+        ret = PTR_RET(newchrled.device);
+        goto fail_device;
     }
     printk("/dev/newchrled device_node create ok\r\n");
     
     return 0;
+
+fail_device:
+    //4,销毁类
+    class_destroy(newchrled.class);
+fail_class:
+    //1,删除字符设备
+    cdev_del(&newchrled.cdev);
+fail_cdev:
+    //2,注销字符设备号
+    unregister_chrdev_region(newchrled.devid, NEWCHRLED_COUNT);
+fail_devid:
+    return ret;
 }
 
 //出口
