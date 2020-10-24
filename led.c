@@ -30,6 +30,24 @@ static void __iomem *SW_PAD_GPIO1_IO03;
 static void __iomem *GPIO1_DR;
 static void __iomem *GPIO1_GDIR;
 
+#define LEDOFF  0   //关
+#define LEDON   1   //开
+
+static void led_switch(u8 sta)
+{
+    u32 val = 0;
+
+    if (sta == LEDON) {
+        val = readl(GPIO1_DR);
+        val &= ~(1 << 3);//bit3清零,打开LED灯
+        writel(val, GPIO1_DR);
+    } else if (sta == LEDOFF) {
+        val = readl(GPIO1_DR);
+        val |= (1 << 3);//关闭LED灯
+        writel(val, GPIO1_DR);
+    }
+}
+
 static int led_open(struct inode *inode, struct file *filp)
 {
     printk("chrdevbase_open\r\n");
@@ -46,6 +64,16 @@ static ssize_t led_write(struct file *filp, __user char *buf,
         size_t count, loff_t *ppos)
 {
     printk("chrdevbase_read\r\n");
+    int retvalue;
+    unsigned char databuf[1];
+
+    retvalue = copy_from_user(databuf, buf, count);
+    if (retvalue < 0) {
+        printk("kernel write failed!\r\n");
+        return -EFAULT;
+    }
+    led_switch(databuf[0]);
+
     return 0;
 }
 
@@ -82,7 +110,7 @@ static int __init led_init(void)
     val = readl(GPIO1_GDIR);
     val |= 1 << 3;//bit3置1,设置为输出
     writel(val, GPIO1_GDIR);
-    
+
     val = readl(GPIO1_DR);
     val &= ~(1 << 3);//bit3清零,打开LED灯
     writel(val, GPIO1_DR);

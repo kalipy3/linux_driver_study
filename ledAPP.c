@@ -15,17 +15,20 @@
 /*
  * argc:应用程序参数个数
  * argv[]:具体的参数内容，字符串形式
- * ./chrdevbaseAPP <filename> <1/2> 1表示读 2表示写
- * ./chrdevbaseAPP /dev/chrdevbase 1 表示从驱动里读数据
- * ./chrdevbaseAPP /dev/chrdevbase 2 表示向驱动里写数据
+ * ./ledAPP <filename> <0/1> 0表示关灯 1表示开灯
+ * ./ledAPP /dev/led 0 关灯
+ * ./ledAPP /dev/led 1 开灯
  */
+
+#define LEDOFF  0
+#define LEDON   1
+
 int main(int argc, char *argv[])
 {
-    int ret = 0;
     int fd = 0;
+    int retvalue = 0;
     char *filename;
-    char readbuf[100], writebuf[100];
-    static char usrdata[] = {"usr data!"};
+    unsigned char databuf[1];
 
     if (argc != 3) {
         printf("Error usage!\r\n");
@@ -40,32 +43,20 @@ int main(int argc, char *argv[])
         return -1;
     }
 
-    //read
-    if (atoi(argv[2]) == 1) {//读
-        ret = read(fd, readbuf, 50);
-        if (ret < 0)
-        {
-            printf("read file %s failed!\r\n", filename);
-        } else {
-            printf("APP read data:%s\r\n", readbuf);
-        }
-    }
-
     //write
-    if (atoi(argv[2]) == 2) {//写
-        memcpy(writebuf, usrdata, sizeof(usrdata));
-        ret = write(fd, writebuf, 50);
-        if (ret < 0)
-        {
-            printf("write file %s failed!\r\n", filename);
-        } else {
+    databuf[0] = atoi(argv[2]);//将字符串转换为数字
 
-        }
+    retvalue = write(fd, databuf, sizeof(databuf));
+    if (retvalue < 0)
+    {
+        printf("LED Control failed!\r\n");
+        close(fd);
+        return -1;
     }
 
     //close
-    ret = close(fd);
-    if (ret < 0) {
+    retvalue = close(fd);
+    if (retvalue < 0) {
         printf("close file %s failed!\r\n", filename);
     }
 
