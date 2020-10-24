@@ -13,6 +13,7 @@
 #include <linux/uaccess.h>
 #include <linux/io.h>
 #include <linux/cdev.h>
+#include <linux/device.h>
 
 //寄存器物理地址
 #define CCM_CCGR1_BASE          (0X020C406C)
@@ -39,6 +40,8 @@ struct newchrled_dev
 {
     struct cdev cdev;//字符设备
     dev_t devid;    //设备号
+    struct class *class;//类
+    struct device *device;//设备
     int major;      //主设备号
     int minor;      //次设备号
 };
@@ -130,7 +133,7 @@ static int /*__init*/ newchrled_init(void)
     val &= ~(1 << 3);//bit3清零,打开LED灯
     writel(val, GPIO1_DR);
 
-    //注册字符设备
+    //2,注册设备号
     if (newchrled.major) {//给定主设备号
         newchrled.devid = MKDEV(newchrled.major, 0);
         ret = register_chrdev_region(newchrled.devid, 1, NEWCHRLED_NAME);
@@ -151,6 +154,19 @@ static int /*__init*/ newchrled_init(void)
     cdev_init(&newchrled.cdev, &newchrled_fops);
     ret = cdev_add(&newchrled.cdev, newchrled.devid, NEWCHRLED_COUNT);
 
+    //4,自动创建设备节点
+    newchrled.class = class_create(THIS_MODULE, NEWCHRLED_NAME); 
+    if (IS_ERR(newchrled.class)) {
+        return PTR_ERR(newchrled.class);
+    }
+    
+    newchrled.device = device_create(newchrled.class, NULL, newchrled.devid,
+            NULL, NEWCHRLED_NAME);
+    if (IS_ERR(newchrled.device)) {
+        return PTR_RET(newchrled.device);
+    }
+    printk("/dev/newchrled device_node create ok\r\n");
+    
     return 0;
 }
 
@@ -173,8 +189,14 @@ static void /*__exit*/ newchrled_exit(void)
     //1,删除字符设备
     cdev_del(&newchrled.cdev);
 
-    //注销字符设备
+    //2,注销字符设备号
     unregister_chrdev_region(newchrled.devid, NEWCHRLED_COUNT);
+
+    //3,销毁设备
+    device_destroy(newchrled.class, newchrled.devid);
+
+    //4,销毁类
+    class_destroy(newchrled.class);
 }
 
 
