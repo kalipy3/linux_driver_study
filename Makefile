@@ -2,7 +2,7 @@ KERNELDIR := /home/kalipy/下载/linux-4.4.235/linux-4.4.235
 
 CURRENT_PATH := $(shell pwd)
 
-obj-m :=led.o
+obj-m :=newchrled.o
 
 build: kernel_modules
 

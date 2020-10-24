@@ -12,9 +12,7 @@
 #include <linux/slab.h>
 #include <linux/uaccess.h>
 #include <linux/io.h>
-
-#define LED_MAJOR   200 //主设备号
-#define LED_NAME    "led" //名字
+#include <linux/cdev.h>
 
 //寄存器物理地址
 #define CCM_CCGR1_BASE          (0X020C406C)
@@ -33,6 +31,20 @@ static void __iomem *GPIO1_GDIR;
 #define LEDOFF  0   //关
 #define LEDON   1   //开
 
+#define NEWCHRLED_NAME "newchrled"
+#define  NEWCHRLED_COUNT    1
+
+//LED设备结构体
+struct newchrled_dev
+{
+    struct cdev cdev;//字符设备
+    dev_t devid;    //设备号
+    int major;      //主设备号
+    int minor;      //次设备号
+};
+
+struct newchrled_dev newchrled;//led设备
+
 static void led_switch(u8 sta)
 {
     u32 val = 0;
@@ -41,26 +53,28 @@ static void led_switch(u8 sta)
         val = readl(GPIO1_DR);
         val &= ~(1 << 3);//bit3清零,打开LED灯
         writel(val, GPIO1_DR);
+        printk("led on\r\n");
     } else if (sta == LEDOFF) {
         val = readl(GPIO1_DR);
         val |= (1 << 3);//关闭LED灯
         writel(val, GPIO1_DR);
+        printk("led off\r\n");
     }
 }
 
-static int led_open(struct inode *inode, struct file *filp)
+static int newchrled_open(struct inode *inode, struct file *filp)
 {
     printk("chrdevbase_open\r\n");
     return 0;
 }
 
-static int led_release(struct inode *inode, struct file *filp)
+static int newchrled_release(struct inode *inode, struct file *filp)
 {
     printk("chrdevbase_release\r\n");
     return 0;
 }
 
-static ssize_t led_write(struct file *filp, __user char *buf, 
+static ssize_t newchrled_write(struct file *filp, __user char *buf, 
         size_t count, loff_t *ppos)
 {
     printk("chrdevbase_read\r\n");
@@ -79,16 +93,17 @@ static ssize_t led_write(struct file *filp, __user char *buf,
 
 
 //字符设备 操作集合
-static struct file_operations led_fops = {
+static struct file_operations newchrled_fops = {
     .owner = THIS_MODULE,
-    .open = led_open,
-    .release = led_release,
-    .write = led_write,
+    .open = newchrled_open,
+    .release = newchrled_release,
+    .write = newchrled_write,
 };
 
 //入口
-static int __init led_init(void)
+static int /*__init*/ newchrled_init(void)
 {
+    printk("led_init\r\n");
     int ret = 0;
     int val = 0;
     //1,初始化LED灯，地址映射
@@ -116,19 +131,33 @@ static int __init led_init(void)
     writel(val, GPIO1_DR);
 
     //注册字符设备
-    ret = register_chrdev(LED_MAJOR, LED_NAME, &led_fops);
-    if (ret < 0) {
-        printk("register chardev failed!\r\n");
-        return -EIO;
+    if (newchrled.major) {//给定主设备号
+        newchrled.devid = MKDEV(newchrled.major, 0);
+        ret = register_chrdev_region(newchrled.devid, 1, NEWCHRLED_NAME);
+    } else {//没有给定主设备号
+        ret = alloc_chrdev_region(&newchrled.devid, 0, 1, NEWCHRLED_NAME);
+        newchrled.major = MAJOR(newchrled.devid);
+        newchrled.minor = MINOR(newchrled.devid);
     }
 
-    printk("led_init\r\n");
+    if (ret < 0) {
+        printk("newchrled chardev_region failed!\r\n");
+        return -1;
+    }
+    printk("newchrled major=%d, minor=%d\r\n", newchrled.major, newchrled.minor);
+
+    //3,注册字符设备
+    newchrled.cdev.owner = THIS_MODULE;
+    cdev_init(&newchrled.cdev, &newchrled_fops);
+    ret = cdev_add(&newchrled.cdev, newchrled.devid, NEWCHRLED_COUNT);
+
     return 0;
 }
 
 //出口
-static void __exit led_exit(void)
+static void /*__exit*/ newchrled_exit(void)
 {
+    printk("newchrled_exit\r\n");
     int val = 0;
     val = readl(GPIO1_DR);
     val |= (1 << 3);//关闭LED灯
@@ -141,14 +170,16 @@ static void __exit led_exit(void)
     iounmap(GPIO1_DR);
     iounmap(GPIO1_GDIR);
 
+    //1,删除字符设备
+    cdev_del(&newchrled.cdev);
+
     //注销字符设备
-    unregister_chrdev(LED_MAJOR, LED_NAME);
-    printk("led_exit\r\n");
+    unregister_chrdev_region(newchrled.devid, NEWCHRLED_COUNT);
 }
 
 
-module_init(led_init);
-module_exit(led_exit);
+module_init(newchrled_init);
+module_exit(newchrled_exit);
 
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("kalipy");
